@@ -1,0 +1,35 @@
+$border:1px solid hsla(0,0%,93%,.8);
+$black:#22222d;
+$lightBlack:#55555d;
+$gray:#88888d;
+$lightGray:#c9c9c9;
+$red:#e94816;
+$orange:#f29600;
+$bg:#f2f2f2;
+
+$h1:.18rem;
+$h2:.15rem;
+$h3:.12rem;
+$h4:.1rem;
+
+$topFloor:203;
+$middleFloor:202;
+$bottomFloor:201;
+
+@mixin bold{font-size:$h2;color:$black;}
+
+@mixin box($value:wrap){display:flex ;display:-webkit-flex;flex-wrap:$value;-webkit-flex-wrap:$value;}
+@mixin flex($value:1){flex:$value;-webkit-flex: $value;}
+@mixin flexDir($value:row){flex-direction:$value;-webkit-flex-direction:$value;}//row-reverse,column,column-reverse
+@mixin flexJustify($value:center){justify-content:$value;-webkit-justify-content:$value;}
+@mixin flexAlign($value:center){align-items:$value;-webkit-align-items:$value;}
+@mixin flexSelf($value:center){align-self: $value;-webkit-align-self: $value;}
+
+
+@mixin transColor_t2b($ctop,$cbtm){background:linear-gradient(to bottom,  $ctop 0%,$cbtm 100%);}
+
+@mixin txtOverflow{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+@mixin txtlineOverflow($line){overflow: hidden;text-overflow: ellipsis;display: -webkit-box;-webkit-line-clamp: $line;-webkit-box-orient: vertical;}
+
+

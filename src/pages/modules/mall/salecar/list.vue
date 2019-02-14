@@ -1,0 +1,387 @@
+<template>
+  <app-layout id="specialCarList" class="goodsList" :subPage="openFilter||openCarBrands" >
+
+
+    <lc-search slot="header" type="car" :keyword="val" v-on:search="search">
+      <div slot="right" :class="'switch '+(switchStyle?'':'car')" v-on:click="switchStyle=!switchStyle"></div>
+    </lc-search>
+    
+
+    <lc-filter slot="header" type="car" :sort="sort" @update:sort="val => sort = val">
+      <li :class="{'on':(cid||openCarBrands)}" @click="switchCarBrands">品牌</li>
+      <li :class="{'on':(hasFilter||openFilter)}" @click="switchFilter">筛选</li>
+    </lc-filter>
+
+
+    <template v-if="openCarBrands">
+      <div slot="subPage" class="page-content">
+        <ul class="list brandList">
+          <li :class="{on:!cid}" @click="selectCarBrand()"><div>不限品牌</div></li>
+          <li :class="{on:(cid==item.cat_id||selectedCarBrand===index||selectedCarBrandId===item.cat_id)}" v-for="(item,index) in carBrands" v-on:click="selectCarBrand(item,index)">
+              <div>
+                <img v-lazy.brands="item.cat_logo" v-show="item.cat_logo">
+                {{ item.cat_name }}
+              </div>
+          </li>
+        </ul>
+      </div>
+
+      <div slot="subPage" id="series" :class="'container subList'+(selectedCarBrand!==''?'':' moveout')">
+        <ul class="page-content list" v-if="selectedCarBrand!==''">
+          <li><div>{{carBrands[selectedCarBrand].cat_name}}</div></li>
+          <li :class="{on:cid==carBrands[selectedCarBrand].cat_id}" @click="selectCarBrand(carBrands[selectedCarBrand])"><div>不限车系</div></li>
+          <li :class="{on:cid==item.cat_id}" v-for="item in carBrands[selectedCarBrand].child" v-on:click="selectCarBrand(item)">
+            <div>{{item.cat_name||''}}</div>
+          </li>
+        </ul>
+      </div> 
+
+      <div slot="subPage" id="brands_cover" class="cover" v-if="selectedCarBrand!==''" v-on:click="selectedCarBrand=''"></div>
+    </template>
+
+
+    <div v-if="openFilter" slot="subPage" class="page-content filter">
+        <h1>价格区间(万元)</h1>
+        <div class="priceIn clearfix">
+          <input type="tel" placeholder="最低价" v-model="filterData.pricestart">
+          <span>—</span>
+          <input type="tel" placeholder="最高价" v-model="filterData.priceend">
+        </div>
+    </div>
+
+    <div v-if="openFilter" slot="footer" class="btns">
+      <button @click="refreshFilter">重置</button>
+      <button @click="switchFilter('confirm')">确定</button>
+    </div>
+
+    <div :class="'goods-list '+(switchStyle?'col1-big':'col1')" v-if="list.length>0" v-infinite-scroll="loadMore" infinite-scroll-disabled="nomore" infinite-scroll-distance="100" infinite-scroll-immediate-check="false" >
+      <router-link class="li" v-for="item in list" :to="'/mall/salecar/'+item.item_id" >
+        <div class="logo">
+          <img v-lazy.appMain="item.img">
+          <span  v-if="item.store==0">卖光啦</span>
+          <div class="salecar-icon" v-else></div>
+        </div>
+        
+        <div class="detail-box">
+          <h1>{{item.title}}</h1>
+          <!-- <p>{{item.sub_title}}</p> -->
+          <ul>
+            <template v-if="item.goucheyouhuitag&&item.goucheyouhuitag!=''">
+              <li class="sale-coupon" v-for="(val,inx) in item.goucheyouhuitag.split(',')">{{val}}</li>
+            </template>
+            
+          </ul>
+          <h3>指导价：<del>￥{{parseFloat(item.zdprice)}}万</del></h3>
+          <div class="special-price">
+            <h2 style="display:flex;display:-webkit-flex;"><img class="icon-pricecar" src="~assets/img/mall/icon_detail_1pricecar.png"/><span>￥{{parseFloat(item.fixedprice)}}万</span></h2>
+            <h3 style="color:#22222d" v-if="item.store>0">限量<span>{{parseFloat(item.store)}}</span>台</h3>
+          </div>
+        </div>
+      </router-link>
+      <lc-nomore v-show="nomore&&totalPages<=pageNo"></lc-nomore>
+    </div>
+
+    <div v-if="list.length===0" class="lc-error">
+        <img src="~assets/img/mall/icon_goods_empty.png">
+        <p>没有符合条件的商品</p>
+    </div>
+    <transition name="slide">
+      <div class="car-switch special" v-if="showSwitch">
+        <router-link tag="span" to="/mall/car?key=" replace >新车</router-link>
+        <span style="color:#fff">特价车</span>
+      </div>
+    </transition>
+    <template slot-scope="slotProps" slot="backtop" v-if="slotProps.scrolltop>0">
+      
+      <lc-backtop></lc-backtop>
+    </template>
+  </app-layout>
+</template>
+
+<script>
+import filter from 'components/mall/filter'
+export default {
+  components:{
+    'lc-filter':filter
+  },
+  data() {
+    return {
+      cid:'',
+      val:'',
+
+      list:[],
+      pageNo: 1,
+      pageSize: 10,
+      nomore: false,
+      totalPages:1,
+      st:0,
+
+      switchStyle:false,
+
+      sort:'default',
+      openFilter:false,
+      itemBrands:[],
+
+      openCarBrands:false,
+      selectedCarBrand:'',
+      selectedCarBrandId:'',
+      carBrands:[],
+
+      filterDataCache:{},
+
+      hasFilter:false,
+      filterData:{
+        priceFrom:'',
+        priceTo:'',
+        pricestart:'',
+        priceend:'',
+        selectedBrands:[]
+      },
+      showSwitch:true,
+      scrollHeight:0
+    };
+  },
+  watch:{
+    sort(val){
+        this.refresh();
+        this.loadMore();
+    }
+  },
+  mounted(){
+    this.$el.children.appMain.addEventListener('scroll', this.handleScroll)
+    eventBus.$on('updateFilterData',()=>{
+        let data=this.filterData;
+        if(data.priceFrom||data.priceTo||data.pricestart||data.priceend||data.selectedBrands.length>0){
+          this.hasFilter=true;
+        }else{
+          this.hasFilter=false;
+        }
+    });
+    eventBus.$on('closeFilter',()=>{
+        this.openCarBrands=false;
+        this.openFilter=false;
+        eventBus.$emit('layout');
+    });
+  },
+  activated(){
+
+    if(this.list.length===0){
+      let search=this.$route.query;
+
+      this.cid=search.key||'';
+      this.val=decodeURI(search.val||'');
+      this.filterData.pricestart=search.pf||'';
+      this.filterData.priceend=search.pt||'';
+
+      eventBus.$emit('updateFilterData');
+      this.loadMore();
+
+     if(this.carBrands.length===0){
+        this.getCarBrands();
+      }
+    }else if(this.st != 0) { 
+      this.$el.children.appMain.scrollTop = this.st;
+      // this.showSwitch=false
+    }
+    
+  },
+  beforeRouteLeave(to, from, next) {
+    if(!/salecar\/|car/.test(to.path)){
+      this.resetPage(next);
+    }else{
+      this.st = this.$el.children.appMain.scrollTop;
+      next();
+    }
+  },
+  methods:{
+    handleScroll(){
+      if(this.$el.children.appMain.scrollTop==0){
+        if(!this.showSwitch){
+          this.showSwitch=true
+          this.scrollHeight=0
+          return
+        }
+      }
+      if(this.$el.children.appMain.scrollTop>this.scrollHeight){
+        this.showSwitch=false
+      }else{
+        this.showSwitch=true
+      }
+      this.scrollHeight=this.$el.children.appMain.scrollTop;
+    },
+    refresh(){
+      this.list=[];
+      this.pageNo=1;
+      this.nomore=false;
+    },
+    resetPage(callback){
+      this.cid='';
+      this.val='';
+
+      this.list=[];
+      this.pageNo=1;
+      this.nomore=false;
+      this.st=0;
+
+      this.switchStyle=false;
+
+      this.sort='default';
+      this.openFilter=false;
+
+      this.openCarBrands=false,
+      this.selectedCarBrand='',
+      this.selectedCarBrandId='',
+      this.carBrands=[];
+
+      this.filterDataCache={};
+
+      this.hasFilter=false;
+      this.filterData={
+        pricestart:'',
+        priceend:'',
+        selectedBrands:[]
+      }
+
+      callback();
+    },
+    switchCarBrands(){
+      this.openCarBrands=!this.openCarBrands;
+      this.openFilter=false;
+      eventBus.$emit('layout');
+    },
+    switchFilter(action){
+      if(action==='confirm'){
+        eventBus.$emit('updateFilterData');
+        this.filter();
+      }else{
+        if(this.openFilter){
+          let cache=JSON.stringify(this.filterDataCache); 
+          this.filterData=JSON.parse(cache);
+
+          let data=this.filterData;
+          if(data.priceend||data.pricestart||data.selectedBrands.length>0){
+            this.hasFilter=true;
+          }else{
+            this.hasFilter=false;
+          }
+
+        }else{
+          let data=JSON.stringify(this.filterData); 
+          this.filterDataCache=JSON.parse(data);
+        }
+      }
+      this.openCarBrands=false
+      this.openFilter=!this.openFilter;
+      eventBus.$emit('layout');
+    },
+    refreshFilter(){
+      this.filterData={
+        pricestart:'',
+        priceend:'',
+        selectedBrands:[]
+      };
+    },
+    filter(){
+      this.refresh();
+      this.loadMore();
+    },
+    selectItemBrands(id){
+      let index=this.filterData.selectedBrands.indexOf(id);
+      if(index<0){
+        this.filterData.selectedBrands.push(id);
+      }else{
+        this.filterData.selectedBrands.splice(index,1);
+      }
+
+      eventBus.$emit('updateFilterData');
+    },
+    selectCarBrand(brand,index){
+      if(brand){
+        if(index!==undefined&&brand.child.length>0){
+          this.selectedCarBrand=index;
+        }else{
+          this.cid=brand.cat_id;
+          this.selectedCarBrandId=brand.parent_id||'';
+          this.refresh();
+          this.loadMore();
+          this.openCarBrands=false;
+        }
+      }else{
+        this.cid='';
+        this.selectedCarBrand='';
+        this.selectedCarBrandId='';
+        this.refresh();
+        this.loadMore();
+        this.openCarBrands=false;
+      }
+    },
+    search(data){
+      this.cid='';
+      this.refresh();
+      this.val=data.keyword;
+      this.loadMore();
+    },
+    async loadMore() {
+          let vm=this;
+          vm.nomore = true;
+          let isCid=/^\d+$/.test(this.cid);
+
+          let data = {
+              content: {
+
+                itemtype:'salecar',
+                pageNo:vm.pageNo,
+                pageSize:vm.pageSize,
+                cat_id:isCid?vm.cid:'',
+                brand_id:vm.filterData.selectedBrands.join(','),
+                searchkey:vm.val||'',
+                pricestart:vm.filterData.pricestart,
+                priceend:vm.filterData.priceend,
+                order:vm.sort==='default'?'':vm.sort,// 默认是sold (销量)、price_asc(升序）、price_desc (降序)  、rand随机maxRecordNum：返回的总数据条数
+              }
+          };
+
+          let res=await vm.$post('/mall29/itemlist.html', data);
+          if (res.errcode === 0) {
+            vm.list = vm.list.concat(res.content.list);
+            vm.totalPages=res.content.totalPages;
+            if (res.content.totalPages > vm.pageNo) {
+              vm.nomore = false;
+              vm.pageNo += 1;
+              
+            }
+          }
+    },
+
+    async getCarBrands() {
+        let data = {
+            content: {
+              getchild:1,
+              itemtype:'salecar'
+            }
+        };
+        let res=await this.$post('/mall29/newcar-category.html',data);
+        if (res.errcode === 0) {
+          this.carBrands = res.content.brand;
+ 
+        }
+    }
+   
+  }
+
+
+}
+</script>
+
+<style lang="scss">
+  @import "~assets/css/mall/goodsList.scss";
+</style>
+
+
+
+
+
+
+
+
+
